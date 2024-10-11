@@ -1,5 +1,4 @@
-# Data Science Toolbox Assessed Coursework 1:
-Supervised Prediction
+# Data Science Toolbox Assessed Coursework 1: Supervised Prediction
 
 ## Group Members
 - Lucy Anthony
