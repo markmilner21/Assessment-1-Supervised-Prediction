@@ -17,9 +17,11 @@ For this project, both R and Python are used. Below are the instructions for set
 
 ### Setup
 
-All additional packages required for R are listed in RReqs.r
-
 All additional packages for Python will be listed in PythonReqs.py
+
+The Training and Testing data for this project can be found in Train_and_Test_data
+
+
 
 ### Evidence 
 
