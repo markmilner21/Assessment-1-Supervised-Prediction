@@ -19,7 +19,7 @@ For this project, both R and Python are used. Below are the instructions for set
 
 All additional packages for Python will be listed in PythonReqs.py
 
-The Training and Testing data for this project can be found in Train_and_Test_data
+The Training and Testing data for this project can be found in Train_and_Test_data folder
 
 
 
