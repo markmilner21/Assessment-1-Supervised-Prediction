@@ -52,3 +52,49 @@ axes[1, 1].set_ylabel('Predictions')
 
 plt.tight_layout()
 plt.show()
+
+# These graphs all show that adjusting the value of k from 5 to 8 does not have much affect on the accuracy of the models predictions
+# Equally the mse does not change dramatically
+# We will also create a residuals plot to visualise whether the model is under or over-predicting
+
+residuals_k5 = true_values - predictions_k5
+residuals_k6 = true_values - predictions_k6
+residuals_k7 = true_values - predictions_k7
+residuals_k8 = true_values - predictions_k8
+
+fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+
+# Plot for k=5
+axes[0, 0].scatter(predictions_k5, residuals_k5, color='r')
+axes[0, 0].axhline(y=0, color='r', linestyle='--')
+axes[0, 0].set_xlabel('Predicted Values')
+axes[0, 0].set_ylabel('Residuals')
+axes[0, 0].set_title('Residual Plot for k=5')
+
+# Plot for k=6
+axes[0, 1].scatter(predictions_k6, residuals_k6, color='b')
+axes[0, 1].axhline(y=0, color='b', linestyle='--')
+axes[0, 1].set_xlabel('Predicted Values')
+axes[0, 1].set_ylabel('Residuals')
+axes[0, 1].set_title('Residual Plot for k=6')
+
+# Plot for k=7
+axes[1, 0].scatter(predictions_k7, residuals_k7, color='g')
+axes[1, 0].axhline(y=0, color='g', linestyle='--')
+axes[1, 0].set_xlabel('Predicted Values')
+axes[1, 0].set_ylabel('Residuals')
+axes[1, 0].set_title('Residual Plot for k=7')
+
+# Plot for k=8
+axes[1, 1].scatter(predictions_k8, residuals_k8, color='y')
+axes[1, 1].axhline(y=0, color='y', linestyle='--')
+axes[1, 1].set_xlabel('Predicted Values')
+axes[1, 1].set_ylabel('Residuals')
+axes[1, 1].set_title('Residual Plot for k=8')
+
+plt.tight_layout()
+plt.show()
+
+# The negative slope in the residuals suggests that the model is systematically under-predicting the higher values and possibly over-predicting some lower values
+# Equally the residuals fan out slightly as the predicted values increase. This phenomenon is called heteroscedasticity, where the error variance changes across the range of predicted values. In this case, it seems the model struggles more with larger predicted values.
+
