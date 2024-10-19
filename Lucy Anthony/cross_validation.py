@@ -26,7 +26,7 @@ print("Best Parameters 3-fold validation: ", grid_search.best_params_)
 print("Best MSE 3-fold validation: ", -grid_search.best_score_)
 
 # Optimising hyperparameters and using 3-fold cross validation gives us mse of 0.1958 using k=26, p=1 (Manhattan Distance), and uniform weights.
-# We will also check for 5-fold validation to see if this is better or worse
+# We will also check for 5-fold validation to see if this is better or worse.
 
 param_grid2 = {
     'n_neighbors' : [8,12, 16, 20, 24,28], 'weights' : ['uniform', 'distance'], 'p' : [1,2]
