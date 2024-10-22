@@ -34,8 +34,6 @@ You can also embed plots, for example:
 
 ```{r pressure, echo=FALSE}
 # Install the package if you haven't already
-install.packages("readxl")
-
 # Load the library
 library(readxl)
 
@@ -45,10 +43,5 @@ train = read_excel("C:/Users/markm/OneDrive/Documents/University/Year 4/dst/GitH
 ```
 
 
-```{r pressure, echo=FALSE}
-print(test$reproduction_rate)
-
-
-```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
