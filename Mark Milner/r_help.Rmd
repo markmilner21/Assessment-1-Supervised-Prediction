@@ -1,0 +1,54 @@
+---
+title: "Untitled"
+author: "Mark Milner"
+date: "2024-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(ggplot2)
+library(dplyr)
+library(ggridges)
+library(sf)
+library(maps)
+library(mapdata)
+library(viridis)
+library(tidyr)
+library(rpart)
+library(caret)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+# Install the package if you haven't already
+install.packages("readxl")
+
+# Load the library
+library(readxl)
+
+# Read the Excel files with corrected paths
+test = read_excel("C:/Users/markm/OneDrive/Documents/University/Year 4/dst/GitHub/Assessment_1/Mark Milner/test.xlsx")
+train = read_excel("C:/Users/markm/OneDrive/Documents/University/Year 4/dst/GitHub/Assessment_1/Mark Milner/train.xlsx")
+```
+
+
+```{r pressure, echo=FALSE}
+print(test$reproduction_rate)
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
