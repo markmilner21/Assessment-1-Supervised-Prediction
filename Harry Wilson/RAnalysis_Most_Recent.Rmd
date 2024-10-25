@@ -1,0 +1,408 @@
+---
+title: "Final_R_Analysis"
+output: html_document
+date: "2024-10-25"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Set the CRAN mirror (UK in this case)
+options(repos = c(CRAN = "https://cran.ma.imperial.ac.uk/"))
+```
+
+```{r message=FALSE, warning=FALSE}
+#Packages
+
+install.packages("readxl")
+install.packages("ranger")
+install.packages("rpart")
+install.packages("rpart.plot")
+install.packages("partykit")
+install.packages("dplyr")
+install.packages("Metrics")
+install.packages("ggplot2")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+#Libraries
+
+library(readxl)
+library(ranger)
+library(rpart)
+library(rpart.plot)
+library(partykit)
+library(dplyr)
+library(Metrics)
+library(ggplot2)
+```
+
+## Section 1: Data Access
+
+#### Test Data
+
+```{r}
+#For the author
+
+# Define the path to your data
+
+data_path = "/Users/harrywilson/Desktop/DataScienceToolbox/Assessment-1-Supervised-Prediction/Train_and_Test_data"
+
+
+
+# Construct the full file path for the Excel file
+
+test_data_path = file.path(data_path, "test.xlsx")
+
+
+# Read the Excel file
+
+test_data = read_excel(test_data_path)
+
+#The mean stringency has a different name to in the training data, so this is going to help us later
+
+# Renaming the column in test_data (if it has the same name)
+colnames(test_data)[colnames(test_data) == "mean_stringency...5"] <- "mean_stringency"
+
+```
+
+
+```{r}
+#For the author
+
+# Define the path to your data
+
+#data_path = "/Users/harrywilson/Desktop/DataScienceToolbox/Assessment-1-Supervised-Prediction/Train_and_Test_data"
+
+
+
+# Construct the full file path for the Excel file
+
+#test_data_path = file.path(data_path, "test.xlsx")
+
+
+# Read the Excel file
+
+#test_data = read_excel(test_data_path)
+```
+
+
+#### Train Data
+
+```{r}
+#For the author
+
+# Define the path to your data
+
+data_path = "/Users/harrywilson/Desktop/DataScienceToolbox/Assessment-1-Supervised-Prediction/Train_and_Test_data"
+
+
+# Construct the full file path for the train Excel file
+
+#train_data_path = file.path(data_path, "train.csv")
+
+
+# Read the Excel/csv file 
+
+#train_data = read_excel(train_data_path)
+
+train_data <- read.csv(file.path(data_path, "train.csv"))
+
+```
+
+```{r}
+#For the reader
+
+# Define the path to your data
+
+#data_path = "[replace with your path]"
+
+
+
+# Construct the full file path for the train Excel file
+
+#train_data_path = file.path(data_path, "train.xlsx")
+
+
+
+# Read the Excel file (using the readxl package)
+
+#train_data = read_excel(train_data_path)
+```
+
+
+```{r}
+head(test_data)
+head(train_data)
+```
+
+This allows us to check if our data set has been installed correctly, as if it has we should see the first few rows and columns of our data set.
+
+## Section 2: Random Forest Exploration
+
+```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")]
+dependent_var = train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data = data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values in any of the variables
+model_data_complete = na.omit(model_data)
+
+# Fit the random forest model using only complete cases
+rf_model <- ranger(
+  formula = dependent_var ~ .,    # Use all independent variables
+  data = model_data_complete,      # Use the complete dataset
+  num.trees = 250,                # Number of trees in the forest
+  importance = 'impurity',        # Measure feature importance
+  mtry = 2, # Adjust this based on the number of independent variables
+  sample.fraction = 0.6,
+  num.threads = 1,
+  replace = FALSE,
+)
+
+# View the model summary
+print(rf_model)
+```
+
+```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")
+# Step 1: Extract the independent variables from test_data
+test_independent_vars <- test_data[, required_columns]
+
+# Step 2: Combine test independent variables and dependent variable into one data frame
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+# Step 3: Remove rows with missing values in any of the columns (independent or dependent)
+test_data_complete <- na.omit(test_data_combined)
+
+# Step 4: Separate independent variables and actual values after omitting rows with NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]  # Independent variables
+actual_values_complete <- test_data_complete$reproduction_rate  # Dependent variable
+
+# Check the number of rows for consistency
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+# Step 5: Make predictions using the complete test data
+predictions <- predict(rf_model, data = test_independent_vars_complete)
+
+# View the predicted values
+predicted_values <- predictions$predictions
+
+# Step 6: Calculate RMSE and MAE to evaluate prediction accuracy
+mse <- mse(actual_values_complete, predicted_values)  # MSE calculation using function
+mae <- mae(actual_values_complete, predicted_values)  # MAE calculation using function
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+
+```
+
+We see the initial model has produced an acceptable MSE so we see Random Forest are a good fit. However, after experimenting with different hyperparameters I found tuning significantly improved our performance metric, mean squared error. 
+
+#### Now going to try bootstrapping
+```{r}
+# Fit the random forest model using only complete cases
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    # Use all independent variables
+  data = model_data_complete,      # Use the complete dataset
+  num.trees = 250,                # Number of trees in the forest
+  importance = 'impurity',        # Measure feature importance
+  mtry = 2, # Adjust this based on the number of independent variables
+  sample.fraction = 0.6,
+  num.threads = 1,
+  replace = TRUE,
+)
+
+
+# View the model summary
+print(rf_model_tuned)
+
+
+```
+
+```{r}
+# Step 1: Extract the independent variables from test_data
+test_independent_vars <- test_data[, required_columns]
+
+# Step 2: Combine test independent variables and dependent variable into one data frame
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+# Step 3: Remove rows with missing values in any of the columns (independent or dependent)
+test_data_complete <- na.omit(test_data_combined)
+
+
+# Step 4: Separate independent variables and actual values after omitting rows with NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]  # Independent variables
+actual_values_complete <- test_data_complete$reproduction_rate  # Dependent variable
+
+# Check the number of rows for consistency
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+# Step 5: Make predictions using the complete test data
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+# View the predicted values
+predicted_values <- predictions$predictions
+
+# Step 6: Calculate RMSE and MAE to evaluate prediction accuracy
+mse <- mse(actual_values_complete, predicted_values)  # MSE calculation using function
+mae <- mae(actual_values_complete, predicted_values)  # MAE calculation using function
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+```
+
+We see that bootstrapping slightly improves our performance metric, however the differences are becoming more insignificant, so we take a different approach to try and improve the mean squared error.
+
+#### Adjusting hyper parameters to get a better mse
+
+```{r}
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    # Use all independent variables
+  data = model_data_complete,      # Use the complete dataset
+  num.trees = 500,                # Number of trees in the forest
+  importance = 'impurity',        # Measure feature importance
+  mtry = 3, # Adjust this based on the number of independent variables
+  sample.fraction = 1,
+  num.threads = 4,
+  replace = TRUE,
+)
+
+
+# View the model summary
+print(rf_model_tuned)
+```
+
+#### Analysing our test data with tuned random forest
+
+```{r}
+# Step 1: Extract the independent variables from test_data
+test_independent_vars <- test_data[, required_columns]
+
+# Step 2: Combine test independent variables and dependent variable into one data frame
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+# Step 3: Remove rows with missing values in any of the columns (independent or dependent)
+test_data_complete <- na.omit(test_data_combined)
+
+# Step 4: Separate independent variables and actual values after omitting rows with NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]  # Independent variables
+actual_values_complete <- test_data_complete$reproduction_rate  # Dependent variable
+
+# Check the number of rows for consistency
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+# Step 5: Make predictions using the complete test data
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+# View the predicted values
+predicted_values <- predictions$predictions
+
+# Step 6: Calculate RMSE and MAE to evaluate prediction accuracy
+mse <- mse(actual_values_complete, predicted_values)  # MSE calculation using function
+mae <- mae(actual_values_complete, predicted_values)  # MAE calculation using function
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+
+```
+
+#### Changing the independent variables
+
+```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")]
+dependent_var = train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data = data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values in any of the variables
+model_data_complete = na.omit(model_data)
+
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    # Use all independent variables
+  data = model_data_complete,      # Use the complete dataset
+  num.trees = 500,                # Number of trees in the forest
+  importance = 'impurity',        # Measure feature importance
+  mtry = 3, # Adjust this based on the number of independent variables
+  sample.fraction = 1,
+  num.threads = 4,
+)
+
+
+# View the model summary
+print(rf_model_tuned)
+```
+
+```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")
+# Step 1: Extract the independent variables from test_data
+test_independent_vars <- test_data[, required_columns]
+
+# Step 2: Combine test independent variables and dependent variable into one data frame
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+# Step 3: Remove rows with missing values in any of the columns (independent or dependent)
+test_data_complete <- na.omit(test_data_combined)
+
+# Step 4: Separate independent variables and actual values after omitting rows with NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]  # Independent variables
+actual_values_complete <- test_data_complete$reproduction_rate  # Dependent variable
+
+# Check the number of rows for consistency
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+# Step 5: Make predictions using the complete test data
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+# View the predicted values
+predicted_values <- predictions$predictions
+
+# Step 6: Calculate RMSE and MAE to evaluate prediction accuracy
+mse <- mse(actual_values_complete, predicted_values)  # MSE calculation using function
+mae <- mae(actual_values_complete, predicted_values)  # MAE calculation using function
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+
+```
+
+### Plotting segments of our decision tree
+
+As we have a Random Forest with 500 trees, it very computationally expensive to plot the whole thing, whilst also being too large to understand. Instead, we choose to plot a segment of the data.
+
+```{r}
+# Fit a decision tree model
+dt_model <- rpart(dependent_var ~ Mean_Stringency_Index + CH_Index + Gov_Resp_Index + Econ_Sup_Index + days_since + total_cases + total_deaths + new_cases + new_deaths, data = model_data_complete)
+
+# Plot the decision tree
+rpart.plot(dt_model, main = "Decision Tree from Training Data")
+
+```
+
+We can also adjust hyperparameters within our plot to increase the number of decision trees, whilst also keeping the plot manageable. 
+
+```{r}
+dt_model_3 <- rpart(
+  dependent_var ~ Mean_Stringency_Index + CH_Index + Gov_Resp_Index + Econ_Sup_Index + days_since + total_cases + total_deaths + new_cases + new_deaths, 
+  data = model_data_complete, 
+  control = rpart.control(minsplit = 10, cp = 0.005)
+)
+rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp = 0.01")
+```
