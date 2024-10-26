@@ -17,7 +17,7 @@ For this project, both R and Python are used. Below are the instructions for set
 
 ### Setup
 
-All additional packages for Python will be listed in PythonReqs.py
+All additional packages for Python will be listed in PyReqs.txt
 
 All additional packages for R will be listen in RReqs.r
 
