@@ -13,6 +13,5 @@ sklearn.model_selection
 sklearn.metrics
 sklearn.feature_selection
 sklearn.decomposition
-sklearn.kernel_ridge
 sklearn.kernel_approximation
 lightgbm
