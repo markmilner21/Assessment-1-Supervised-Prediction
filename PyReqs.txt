@@ -7,4 +7,12 @@ missingno
 sklearn.experimental 
 sklearn.impute 
 sklearn.linear_model 
+sklearn.preprocessing
+sklearn.neighbors
+sklearn.model_selection
+sklearn.metrics
+sklearn.feature_selection
+sklearn.decomposition
+sklearn.kernel_ridge
+sklearn.kernel_approximation
 lightgbm
