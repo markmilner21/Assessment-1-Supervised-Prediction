@@ -435,9 +435,6 @@ rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp =
 ```
 
 ```{r}
-# Load necessary libraries
-library(ranger)  # For random forest model
-library(ggplot2) # For plotting
 
 # Step 1: Filter the test data for UAE entries only
 uae_test_data <- test_data[test_data$location == "United Arab Emirates", ]
@@ -457,20 +454,24 @@ uae_results <- data.frame(
 
 # Step 5: Plotting actual vs. predicted reproduction rates over time for UAE
 ggplot(uae_results, aes(x = date)) +
-  geom_line(aes(y = actual_reproduction_rate, color = "Actual"), size = 1) +
-  geom_line(aes(y = predicted_reproduction_rate, color = "Predicted"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = actual_reproduction_rate, color = "Actual Reproduction Rate"), size = 1) +
+  geom_line(aes(y = predicted_reproduction_rate, color = "Predicted Reproduction Rate"), size = 1, linetype = "dashed") +
   labs(
     title = "COVID-19 Reproduction Rate Prediction for UAE",
     x = "Date",
-    y = "Reproduction Rate",
-    color = "Legend"
+    y = "Reproduction Rate"
   ) +
-  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  scale_color_manual(
+    name = "",  # Set the legend title here
+    values = c("Actual Reproduction Rate" = "blue", "Predicted Reproduction Rate" = "red")
+  ) +
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5),
     legend.position = "top"
   )
 
+mse_value <- mse(uae_results$actual_reproduction_rate, uae_results$predicted_reproduction_rate)
+cat("MSE:", mse_value, "\n")
 ```
 
