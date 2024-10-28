@@ -142,6 +142,13 @@ head(train_data)
 
 This allows us to check if our data set has been installed correctly, as if it has we should see the first few rows and columns of our data set.
 
+## Introduction
+
+In this section we will be analysing the reproduction rate of COVID-19 in a number of countries. We will be conducting this analysis through the use of the Random Forest regression model, first taking a look at key indicators, including the Mean Stringency Index, Community Health Index, Government Response Index and Economic Support Index throughout the pandemic. 
+
+These collectively capture policy response, temporal progression of the virus and public health conditions, allowing us to take a comprehensive approach to predicting and understanding COVID-19's reproduction rate. We use mean squared error (MSE) as our performance metric, and in this study we aim to improve a model to be able to capture the complexities of COVI-19 transmission.
+
+
 ## Section 2: Random Forest Exploration
 
 ```{r}
@@ -159,7 +166,7 @@ model_data_complete = na.omit(model_data)
 rf_model <- ranger(
   formula = dependent_var ~ .,    # Use all independent variables
   data = model_data_complete,      # Use the complete dataset
-  num.trees = 250,                # Number of trees in the forest
+  num.trees = 50,                # Number of trees in the forest
   importance = 'impurity',        # Measure feature importance
   mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 0.6,
@@ -206,15 +213,17 @@ cat("MAE:", mae, "\n")
 
 ```
 
-We see the initial model has produced an acceptable MSE so we see Random Forest are a good fit. However, after experimenting with different hyperparameters I found tuning significantly improved our performance metric, mean squared error. 
-
 #### Now going to try bootstrapping
+
+We see our initial model has produced an acceptable MSE, so we see our independent variables are giving us a good prediction. However, to improve the reliability of our model we will apply bootstrapping techniques. This is a resampling method, enabling a more accurate estimation of model uncertainty by generating multiple samples from our original dataset. Incorporating this approach should refine our models predictions, giving us a lower MSE.
+
+
 ```{r}
 # Fit the random forest model using only complete cases
 rf_model_tuned <- ranger(
   formula = dependent_var ~ .,    # Use all independent variables
   data = model_data_complete,      # Use the complete dataset
-  num.trees = 250,                # Number of trees in the forest
+  num.trees = 50,                # Number of trees in the forest
   importance = 'impurity',        # Measure feature importance
   mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 0.6,
@@ -263,30 +272,44 @@ cat("MSE:", mse, "\n")
 cat("MAE:", mae, "\n")
 ```
 
-We see that bootstrapping slightly improves our performance metric, however the differences are becoming more insignificant, so we take a different approach to try and improve the mean squared error.
+After applying bootstrapping our performance metric slightly improves. The reduction, though minimal, demonstrates the value of bootstrapping. This highlights the Random Forest's reliability, however indicates further adjustments may need to be made beyond resampling to thoroughly improve our model.
 
-#### Adjusting hyper parameters to get a better mse
+#### Changing Independent Variables
+
+To further improve the predictive accuracy of our model, we introduce additional independent variables, looking at total cases and deaths, along with new cases and deaths. These variables offer even more detail on the pandemic's progression. By expanding the model's feature set, we enhance its ability to understand COVID-19 transmission dynamics.
+
 
 ```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")]
+dependent_var = train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data = data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values in any of the variables
+model_data_complete = na.omit(model_data)
+
 rf_model_tuned <- ranger(
   formula = dependent_var ~ .,    # Use all independent variables
   data = model_data_complete,      # Use the complete dataset
-  num.trees = 500,                # Number of trees in the forest
+  num.trees = 50,                # Number of trees in the forest
   importance = 'impurity',        # Measure feature importance
-  mtry = 3, # Adjust this based on the number of independent variables
-  sample.fraction = 1,
-  num.threads = 4,
+  mtry = 2, # Adjust this based on the number of independent variables
+  sample.fraction = 0.6,
+  num.threads = 1,
   replace = TRUE,
 )
 
 
 # View the model summary
 print(rf_model_tuned)
+
 ```
 
-#### Analysing our test data with tuned random forest
 
 ```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")
 # Step 1: Extract the independent variables from test_data
 test_independent_vars <- test_data[, required_columns]
 
@@ -320,7 +343,10 @@ cat("MAE:", mae, "\n")
 
 ```
 
-#### Changing the independent variables
+
+
+
+#### Adjusting hyper parameters 
 
 ```{r}
 # Specify the columns for independent variables and dependent variable
@@ -336,11 +362,12 @@ model_data_complete = na.omit(model_data)
 rf_model_tuned <- ranger(
   formula = dependent_var ~ .,    # Use all independent variables
   data = model_data_complete,      # Use the complete dataset
-  num.trees = 500,                # Number of trees in the forest
+  num.trees = 350,                # Number of trees in the forest
   importance = 'impurity',        # Measure feature importance
-  mtry = 3, # Adjust this based on the number of independent variables
+  mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 1,
-  num.threads = 4,
+  num.threads = 1,
+  replace = TRUE,
 )
 
 
@@ -385,7 +412,7 @@ cat("MAE:", mae, "\n")
 
 ### Plotting segments of our decision tree
 
-As we have a Random Forest with 500 trees, it very computationally expensive to plot the whole thing, whilst also being too large to understand. Instead, we choose to plot a segment of the data.
+As we have a Random Forest with 350 trees, it very computationally expensive to plot the whole thing, whilst also being too large to understand. Instead, we choose to plot a segment of the data.
 
 ```{r}
 # Fit a decision tree model
@@ -404,5 +431,46 @@ dt_model_3 <- rpart(
   data = model_data_complete, 
   control = rpart.control(minsplit = 10, cp = 0.005)
 )
-rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp = 0.01")
+rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp = 0.005")
 ```
+
+```{r}
+# Load necessary libraries
+library(ranger)  # For random forest model
+library(ggplot2) # For plotting
+
+# Step 1: Filter the test data for UAE entries only
+uae_test_data <- test_data[test_data$location == "United Arab Emirates", ]
+
+# Step 2: Prepare the independent variables for prediction (no need for additional filtering or column checks)
+uae_independent_vars <- uae_test_data[, required_columns]
+
+# Step 3: Predict reproduction rates for UAE test data
+uae_predictions <- predict(rf_model_tuned, data = uae_independent_vars)$predictions
+
+# Step 4: Create a data frame with dates, actual reproduction rates, and predicted reproduction rates
+uae_results <- data.frame(
+  date = uae_test_data$date,
+  actual_reproduction_rate = uae_test_data$reproduction_rate,
+  predicted_reproduction_rate = uae_predictions
+)
+
+# Step 5: Plotting actual vs. predicted reproduction rates over time for UAE
+ggplot(uae_results, aes(x = date)) +
+  geom_line(aes(y = actual_reproduction_rate, color = "Actual"), size = 1) +
+  geom_line(aes(y = predicted_reproduction_rate, color = "Predicted"), size = 1, linetype = "dashed") +
+  labs(
+    title = "COVID-19 Reproduction Rate Prediction for UAE",
+    x = "Date",
+    y = "Reproduction Rate",
+    color = "Legend"
+  ) +
+  scale_color_manual(values = c("Actual" = "blue", "Predicted" = "red")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top"
+  )
+
+```
+
