@@ -6,7 +6,7 @@ date: "2024-10-28"
 
 ```{r}
 pkgs=c("ggplot2",
-       "dplyr", "readxl", "ranger", "rpart", "rpart.plot", "partykit", "Metric")
+       "dplyr", "readxl", "ranger", "rpart", "rpart.plot", "partykit", "Metrics", "caret")
 
 for(p in pkgs){
   if (!require(p,character.only=TRUE)) install.packages(p)

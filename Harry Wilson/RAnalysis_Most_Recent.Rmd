@@ -13,13 +13,13 @@ knitr::opts_chunk$set(echo = TRUE)
 options(repos = c(CRAN = "https://cran.ma.imperial.ac.uk/"))
 ```
 
-## Section 0: Overview
+## 0: Overview
 
 In this section we will be analysing the reproduction rate of COVID-19 in a number of countries. We will be conducting this analysis through the use of the Random Forest regression model, first taking a look at key indicators, including the Mean Stringency Index, Community Health Index, Government Response Index and Economic Support Index throughout the pandemic. 
 
 These collectively capture policy response, temporal progression of the virus and public health conditions, allowing us to take a comprehensive approach to predicting and understanding COVID-19's reproduction rate. We use mean squared error (MSE) as our performance metric, and in this study we aim to improve a model to be able to capture the complexities of COVID-19 transmission.
 
-## Section 1: Necessary Imports
+## 1: Necessary Imports
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -33,9 +33,10 @@ library(partykit)
 library(dplyr)
 library(Metrics)
 library(ggplot2)
+library(caret)
 ```
 
-## Section 2: Data Access
+## 2: Data Access
 
 
 #### Train Data
@@ -136,7 +137,7 @@ head(train_data)
 This allows us to check if our data set has been installed correctly, as if it has we should see the first few rows and columns of our data set.
 
 
-## Section 3: Implementing the Model
+## 3: Implementing the Model
 
 #### Vanilla Model
 
@@ -159,7 +160,7 @@ rf_model <- ranger(
   importance = 'impurity',        # Measure feature importance
   mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 0.5,
-  num.threads = 1,
+  num.threads = 3,
   replace = FALSE,
 )
 
@@ -227,7 +228,7 @@ rf_model_tuned <- ranger(
   importance = 'impurity',        
   mtry = 2, 
   sample.fraction = 0.5,
-  num.threads = 1,
+  num.threads = 3,
   replace = TRUE,
 )
 
@@ -297,7 +298,7 @@ rf_model_tuned <- ranger(
   importance = 'impurity',        # Measure feature importance
   mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 0.5,
-  num.threads = 1,
+  num.threads = 3,
   replace = TRUE,
 )
 
@@ -348,7 +349,91 @@ cat("MAE:", mae, "\n")
 
 #### Adjusting Hyperparameters 
 
-In my final iteration of my model, I tuned key hyperparameters. I increased the number of trees from 50 to 350, along with modifying the sample fraction from 0.5 to 1. Overall, these hyperparameter adjustments aim to optimise the model's ability to predict by enhancing the diversity of the trees, whilst maintaining access to our complete dataset for training.
+For my final iteration of the model, I used cross-validation to find the optimal number of trees, along with modifying the sample fraction from 0.5 to 1. Overall, these hyperparameter adjustments aim to optimise the model's ability to predict by enhancing the diversity of the trees, whilst maintaining access to our complete dataset for training.
+
+#### 3 Fold Cross-Validation
+
+```{r}
+
+# Specify columns for independent and dependent variables
+independent_vars <- train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", 
+                                    "Econ_Sup_Index", "days_since", "total_cases", 
+                                    "total_deaths", "new_cases", "new_deaths")]
+dependent_var <- train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data <- data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values
+model_data_complete <- na.omit(model_data)
+
+# Set up cross-validation control
+train_control <- trainControl(method = "cv", number = 3)  # 3-fold cross-validation
+
+# Define the list of num.trees values to evaluate
+num_trees_list <- c(50, 350, 500)
+
+# Initialize a list to store the results
+results <- list()
+
+# Loop through each value of num.trees
+for (num_trees in num_trees_list) {
+  # Train model using cross-validation with the current num.trees value
+  rf_model_cv <- train(
+    dependent_var ~ .,                 # Use all independent variables
+    data = model_data_complete,        # Use complete dataset
+    method = "ranger",                 # Use ranger package
+    trControl = train_control,         # Apply cross-validation
+    tuneGrid = expand.grid(mtry = 2,    # Fix mtry to 2
+                           splitrule = "variance", 
+                           min.node.size = 5), 
+    importance = "impurity",           # Measure feature importance
+    num.trees = num_trees,             # Set current num.trees
+    num.threads = 3,                   # Number of threads
+    replace = TRUE
+  )
+  
+  # Calculate MSE for this configuration
+  min_mse <- min(rf_model_cv$results$RMSE^2)  # Convert RMSE to MSE
+
+  # Store the model and the best result for this num.trees value
+  results[[paste("num_trees", num_trees, sep = "_")]] <- list(
+    model = rf_model_cv,
+    bestTune = rf_model_cv$bestTune,
+    MSE = min_mse  # Store minimum MSE for this configuration
+  )
+}
+
+# Print results for each num.trees
+for (res in names(results)) {
+  cat("Results for", res, ":\n")
+  print(results[[res]]$bestTune)
+  cat("Best MSE:", results[[res]]$MSE, "\n\n")
+}
+
+# Select the model with the lowest MSE
+best_model_key <- names(results)[which.min(sapply(results, function(x) x$MSE))]
+best_model <- results[[best_model_key]]$model
+
+# Print best model's parameters
+cat("Best model parameters (lowest MSE):\n")
+print(best_model$bestTune)
+cat("Number of trees:", gsub("num_trees_", "", best_model_key), "\n")
+cat("Best cross-validated MSE:", min(sapply(results, function(x) x$MSE)), "\n\n")
+
+# Make predictions using the best model
+predictions <- predict(best_model, newdata = test_independent_vars_complete)
+
+# Calculate performance metrics on test data
+mse <- mean((actual_values_complete - predictions)^2)  # Calculate MSE
+mae <- mean(abs(actual_values_complete - predictions))  # Calculate MAE
+
+# Print error metrics
+cat("Test MSE:", mse, "\n")
+cat("Test MAE:", mae, "\n")
+
+```
+
 
 ##### Understanding Our Hyperparameters
 
@@ -379,7 +464,7 @@ rf_model_tuned <- ranger(
   mtry = 2, # Adjust this based on the number of independent variables
   sample.fraction = 1,
   num.threads = 3,
-  replace = TRUE,
+  replace = TRUE
 )
 
 
@@ -422,6 +507,7 @@ cat("MAE:", mae, "\n")
 
 ```
 
+
 #### Visualising Our Random Forest
 
 As we have a Random Forest with 350 trees, it's very computationally expensive to plot the whole thing, along with being more complex to understand. Instead, we choose to plot a segment of the data.
@@ -450,7 +536,7 @@ rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp =
 
 Here, our sub-section of our final random forest is composed of numerous decision trees, splitting data based on our independent variables. For example our first tree splits up our data based on if the days since the start of the pandemic has exceeded or met 764. If so, 33% of our data has a predicted value of 0.75 for our reproduction rate. If no, 67% of our data has a predicted value of 1. Our random forest does this multiple times, looking at our different independent variables.
 
-## Section 4: Visualising Model Success
+## 4: Visualising Model Success
 
 
 #### Scatter Plot Visualising Actual Reproduction Rates vs. Our Predicted Rates for all Countries
@@ -493,6 +579,8 @@ ggplot(results, aes(x = actual_reproduction_rate, y = predicted_reproduction_rat
 
 ```
 
+This is a scatter plot of actual reproduction rate against the random forests prediction. Better performing models will have a higher correlation with the red line, so it is evident our model is making errors.
+
 #### Scatter Plot of Our Residuals
 
 ```{r}
@@ -517,8 +605,9 @@ ggplot(results, aes(x = predicted_reproduction_rate, y = residuals)) +
 
 ```
 
+This residuals plot shows the residuals, the difference between actual and predicted values, on the y-axis against predicted values of reproduction rate on the x-axis. A great model would have most points by the red line.
 
-## Section 5: References
+## 5: References
 
 
 
