@@ -1,0 +1,624 @@
+---
+title: "Final_R_Analysis"
+output: html_document
+date: "2024-10-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Set the CRAN mirror (UK in this case)
+options(repos = c(CRAN = "https://cran.ma.imperial.ac.uk/"))
+```
+
+## 0: Overview
+
+In this section we will be analysing the reproduction rate of COVID-19 in a number of countries. We will be conducting this analysis through the use of the Random Forest regression model, first taking a look at key indicators, including the Mean Stringency Index, Community Health Index, Government Response Index and Economic Support Index throughout the pandemic. 
+
+These collectively capture policy response, temporal progression of the virus and public health conditions, allowing us to take a comprehensive approach to predicting and understanding COVID-19's reproduction rate. We use mean squared error (MSE) as our performance metric, and in this study we aim to improve a model to be able to capture the complexities of COVID-19 transmission.
+
+## 1: Necessary Imports
+
+
+```{r message=FALSE, warning=FALSE}
+#Libraries
+
+library(readxl)
+library(ranger)
+library(rpart)
+library(rpart.plot)
+library(partykit)
+library(dplyr)
+library(Metrics)
+library(ggplot2)
+library(caret)
+```
+
+## 2: Data Access
+
+
+#### Train Data
+
+```{r}
+#For the author
+
+# Define the path to your data
+
+data_path = "/Users/harrywilson/Desktop/DataScienceToolbox/Assessment-1-Supervised-Prediction/Train_and_Test_data"
+
+
+# Construct the full file path for the train Excel file
+
+#train_data_path = file.path(data_path, "train.csv")
+
+
+# Read the Excel/csv file 
+
+#train_data = read_excel(train_data_path)
+
+train_data <- read.csv(file.path(data_path, "train.csv"))
+
+```
+
+```{r}
+#For the reader
+
+# Define the path to your data
+
+#data_path = "[replace with your path]"
+
+
+
+# Construct the full file path for the train Excel file
+
+#train_data_path = file.path(data_path, "train.xlsx")
+
+
+
+# Read the Excel file (using the readxl package)
+
+#train_data = read_excel(train_data_path)
+```
+
+#### Test Data
+
+```{r}
+#For the author
+
+# Define the path to your data
+
+data_path = "/Users/harrywilson/Desktop/DataScienceToolbox/Assessment-1-Supervised-Prediction/Train_and_Test_data"
+
+
+
+# Construct the full file path for the Excel file
+
+test_data_path = file.path(data_path, "test.xlsx")
+
+
+# Read the Excel file
+
+test_data = read_excel(test_data_path)
+
+#The mean stringency has a different name to in the training data, so this is going to help us later
+
+# Renaming the column in test_data (if it has the same name)
+colnames(test_data)[colnames(test_data) == "mean_stringency...5"] <- "mean_stringency"
+
+```
+
+
+```{r}
+#For the reader
+
+# Define the path to your data
+
+#data_path = "[replace with your path]"
+
+
+
+# Construct the full file path for the Excel file
+
+#test_data_path = file.path(data_path, "test.xlsx")
+
+
+# Read the Excel file
+
+#test_data = read_excel(test_data_path)
+```
+
+```{r}
+head(test_data)
+head(train_data)
+```
+
+This allows us to check if our data set has been installed correctly, as if it has we should see the first few rows and columns of our data set.
+
+
+## 3: Implementing the RF Model
+
+#### Vanilla Model
+
+```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")]
+dependent_var = train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data = data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values in any of the variables
+model_data_complete = na.omit(model_data)
+
+# Fit the random forest model using only complete cases
+rf_model <- ranger(
+  formula = dependent_var ~ .,    # Use all independent variables
+  data = model_data_complete,      # Use the complete dataset
+  num.trees = 50,                # Number of trees in the forest
+  importance = 'impurity',        # Measure feature importance
+  mtry = 2, 
+  sample.fraction = 0.5,
+  num.threads = 3,
+  replace = FALSE,
+)
+
+# View the model summary
+print(rf_model)
+```
+
+```{r}
+# Specify our independent variables
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")
+
+# Extract the independent variables from test_data
+test_independent_vars <- test_data[, required_columns]
+
+# Combine test independent variables and dependent variable into one data frame
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+# Remove rows with missing values in any of the columns (independent or dependent)
+test_data_complete <- na.omit(test_data_combined)
+
+# Separate independent variables and actual values after omitting rows with NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]  # Independent variables
+actual_values_complete <- test_data_complete$reproduction_rate  # Dependent variable
+
+# Check the number of rows for consistency
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+# Make predictions using the complete test data
+predictions <- predict(rf_model, data = test_independent_vars_complete)
+
+# View the predicted values
+predicted_values <- predictions$predictions
+
+# Calculate RMSE and MAE to evaluate prediction accuracy
+mse <- mse(actual_values_complete, predicted_values)  # MSE calculation using function
+
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+
+
+```
+We see our initial model has produced an acceptable MSE, so we see our independent variables are giving us a good prediction. However, to improve the reliability of our model we will apply bootstrapping techniques. This is a re-sampling method, enabling a more accurate estimation of model uncertainty by generating multiple samples from our original data set. Incorporating this approach should refine our models predictions, giving us a lower MSE.
+
+#### Bootstrapping Our Model
+
+
+```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")]
+dependent_var = train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data = data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values in any of the variables
+model_data_complete = na.omit(model_data)
+
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    
+  data = model_data_complete,      
+  num.trees = 50,                
+  importance = 'impurity',        
+  mtry = 2, 
+  sample.fraction = 0.5,
+  num.threads = 3,
+  replace = TRUE,   # Enables bootstrapping
+)
+
+
+# View the model summary
+print(rf_model_tuned)
+
+```
+
+```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since")
+
+test_independent_vars <- test_data[, required_columns]
+
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+
+test_data_complete <- na.omit(test_data_combined)
+
+
+test_independent_vars_complete <- test_data_complete[, required_columns]  
+
+actual_values_complete <- test_data_complete$reproduction_rate  
+
+
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+
+predicted_values <- predictions$predictions
+
+
+mse <- mse(actual_values_complete, predicted_values)  
+
+# Print the error metrics
+cat("MSE:", mse, "\n")
+
+
+```
+
+After applying bootstrapping our performance metric slightly improves. The reduction, though minimal, demonstrates the value of bootstrapping. This highlights the Random Forest's reliability, however indicates further adjustments may need to be made beyond resampling to thoroughly improve our model.
+
+#### Changing Independent Variables
+
+To further improve the predictive accuracy of our model, we introduce additional independent variables, looking at total cases and deaths, along with new cases and deaths. These variables offer even more detail on the pandemic's progression. By expanding the model's feature set, we enhance its ability to understand COVID-19 transmission dynamics.
+
+
+```{r}
+# Specify the columns for independent variables and dependent variable
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")]
+dependent_var = train_data$reproduction_rate
+
+
+model_data = data.frame(dependent_var, independent_vars)
+
+
+model_data_complete = na.omit(model_data)
+
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    
+  data = model_data_complete,      
+  num.trees = 50,                
+  importance = 'impurity',        
+  mtry = 2, 
+  sample.fraction = 0.5,
+  num.threads = 3,
+  replace = TRUE,
+)
+
+
+print(rf_model_tuned)
+
+```
+
+
+```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")
+
+test_independent_vars <- test_data[, required_columns]
+
+
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+
+test_data_complete <- na.omit(test_data_combined)
+
+
+test_independent_vars_complete <- test_data_complete[, required_columns]  
+actual_values_complete <- test_data_complete$reproduction_rate  
+
+
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+
+predicted_values <- predictions$predictions
+
+
+mse <- mse(actual_values_complete, predicted_values)  
+mae <- mae(actual_values_complete, predicted_values)  
+
+
+cat("MSE:", mse, "\n")
+
+
+```
+
+
+## 4: Cross Validation
+
+#### Adjusting Hyperparameters 
+
+For my final iteration of the model, I used cross-validation to find the optimal number of trees, along with modifying the sample fraction from 0.5 to 1. Overall, these hyperparameter adjustments aim to optimise the model's ability to predict by enhancing the diversity of the trees, whilst maintaining access to our complete dataset for training.
+
+#### 3 Fold Cross-Validation
+
+```{r}
+
+# Specify columns for independent and dependent variables
+independent_vars <- train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", 
+                                    "Econ_Sup_Index", "days_since", "total_cases", 
+                                    "total_deaths", "new_cases", "new_deaths")]
+dependent_var <- train_data$reproduction_rate
+
+# Combine into a new data frame
+model_data <- data.frame(dependent_var, independent_vars)
+
+# Remove rows with missing values
+model_data_complete <- na.omit(model_data)
+
+# Set up cross-validation control
+train_control <- trainControl(method = "cv", number = 3)  # 3-fold cross-validation
+
+# Define the list of num.trees values to evaluate
+num_trees_list <- c(50, 350, 500)
+
+# Initialize a list to store the results
+results <- list()
+
+# Loop through each value of num.trees
+for (num_trees in num_trees_list) {
+  # Train model using cross-validation with the current num.trees value
+  rf_model_cv <- train(
+    dependent_var ~ .,                 # Use all independent variables
+    data = model_data_complete,        # Use complete dataset
+    method = "ranger",                 # Use ranger package
+    trControl = train_control,         # Apply cross-validation
+    tuneGrid = expand.grid(mtry = 2,    # Fix mtry to 2
+                           splitrule = "variance", 
+                           min.node.size = 5), 
+    importance = "impurity",           # Measure feature importance
+    num.trees = num_trees,             # Set current num.trees
+    num.threads = 3,                   # Number of threads
+    replace = TRUE
+  )
+  
+  # Calculate MSE for this configuration
+  min_mse <- min(rf_model_cv$results$RMSE^2)  # Convert RMSE to MSE
+
+  # Store the model and the best result for this num.trees value
+  results[[paste("num_trees", num_trees, sep = "_")]] <- list(
+    model = rf_model_cv,
+    bestTune = rf_model_cv$bestTune,
+    MSE = min_mse  # Store minimum MSE for this configuration
+  )
+}
+
+# Print results for each num.trees
+for (res in names(results)) {
+  cat("Results for", res, ":\n")
+  print(results[[res]]$bestTune)
+  cat("Best MSE:", results[[res]]$MSE, "\n\n")
+}
+
+# Select the model with the lowest MSE
+best_model_key <- names(results)[which.min(sapply(results, function(x) x$MSE))]
+best_model <- results[[best_model_key]]$model
+
+# Print best model's parameters
+cat("Best model parameters (lowest MSE):\n")
+print(best_model$bestTune)
+cat("Number of trees:", gsub("num_trees_", "", best_model_key), "\n")
+cat("Best cross-validated MSE:", min(sapply(results, function(x) x$MSE)), "\n\n")
+
+# Make predictions using the best model
+predictions <- predict(best_model, newdata = test_independent_vars_complete)
+
+# Calculate performance metrics on test data
+mse <- mean((actual_values_complete - predictions)^2)  # Calculate MSE
+mae <- mean(abs(actual_values_complete - predictions))  # Calculate MAE
+
+# Print error metrics
+cat("Test MSE:", mse, "\n")
+cat("Test MAE:", mae, "\n")
+
+```
+
+
+##### Understanding Our Hyperparameters
+
+Adjusting "num.trees = 50" to "num.trees = 350" increases the number of decision trees in our forest. This should improve performance by reducing variance, and enhancing stability in our model.
+
+We kept "mtry = 2", which means the model selects two independent variables at random to consider at each split. this introduces randomness into our model, and helps to prevent overfitting.
+
+Changing "sample.fraction" to 1 means the model uses the entire dataset for training at each tree. However, setting "sample.fraction = 0.5" means only half the dataset is used at each tree. This is advantageous to ensuring all data contributes to our model.
+
+We changed "num.threads = 3", this means we allow the algorithm to utlise three CPU threads simultaneously. This can speed up our training process, specifically because we have a large dataset, as it allows multiple trees to be built concurrently.
+
+#### Our optimal Model
+
+```{r}
+
+independent_vars = train_data[, c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")]
+dependent_var = train_data$reproduction_rate
+
+
+model_data = data.frame(dependent_var, independent_vars)
+
+
+model_data_complete = na.omit(model_data)
+
+rf_model_tuned <- ranger(
+  formula = dependent_var ~ .,    
+  data = model_data_complete,     
+  num.trees = 350,                
+  importance = 'impurity',       
+  mtry = 2, 
+  sample.fraction = 1,
+  num.threads = 3,
+  replace = TRUE
+)
+
+
+print(rf_model_tuned)
+```
+
+```{r}
+required_columns <- c("Mean_Stringency_Index", "CH_Index", "Gov_Resp_Index", "Econ_Sup_Index", "days_since", "total_cases", "total_deaths", "new_cases", "new_deaths")
+
+test_independent_vars <- test_data[, required_columns]
+
+
+test_data_combined <- data.frame(test_independent_vars, reproduction_rate = test_data$reproduction_rate)
+
+
+test_data_complete <- na.omit(test_data_combined)
+
+test_independent_vars_complete <- test_data_complete[, required_columns]  
+actual_values_complete <- test_data_complete$reproduction_rate  
+
+
+cat("Number of rows in independent variables:", nrow(test_independent_vars_complete), "\n")
+cat("Number of rows in actual values:", length(actual_values_complete), "\n")
+
+
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+
+predicted_values <- predictions$predictions
+
+
+mse <- mse(actual_values_complete, predicted_values)  
+mae <- mae(actual_values_complete, predicted_values)  
+
+
+cat("MSE:", mse, "\n")
+cat("MAE:", mae, "\n")
+
+```
+Here we see our best model so far, with the lowest MSE achieved. This is a very good MSE considering the complex nature of our dataset, considering the sudden changes due to new policy, lockdowns, re-openings and so many more factors due to the COVID-19 pandemic.
+
+## 5: Visualising Our Random Forest
+
+As we have a Random Forest with 350 trees, it's very computationally expensive to plot the whole thing, along with being more complex to understand. Instead, we choose to plot a segment of the data.
+
+```{r}
+# Fit a decision tree model
+dt_model <- rpart(dependent_var ~ Mean_Stringency_Index + CH_Index + Gov_Resp_Index + Econ_Sup_Index + days_since + total_cases + total_deaths + new_cases + new_deaths, data = model_data_complete)
+
+# Plot the decision tree
+rpart.plot(dt_model, main = "Decision Tree from Training Data")
+
+```
+
+We can also adjust hyperparameters within our plot to increase the number of decision trees, whilst also keeping the plot manageable. 
+
+```{r}
+dt_model_3 <- rpart(
+  dependent_var ~ Mean_Stringency_Index + CH_Index + Gov_Resp_Index + Econ_Sup_Index + days_since + total_cases + total_deaths + new_cases + new_deaths, 
+  data = model_data_complete, 
+  control = rpart.control(minsplit = 10, cp = 0.005)
+)
+rpart.plot(dt_model_3, main = "Complex Decision Tree with minsplit = 10 and cp = 0.005")
+```
+
+#### Understanding Our Random Forest
+
+Here, our sub-section of our final random forest is composed of numerous decision trees, splitting data based on our independent variables. For example our first tree splits up our data based on if the days since the start of the pandemic has exceeded or met 764. If so, 33% of our data has a predicted value of 0.75 for our reproduction rate. If no, 67% of our data has a predicted value of 1. Our random forest does this multiple times, looking at our different independent variables.
+
+## 6: Visualising Model Success
+
+
+#### Scatter Plot Visualising Actual Reproduction Rates vs. Our Predicted Rates for all Countries
+```{r}
+# Extract the independent variables and dependent variable (reproduction rate)
+test_data_combined <- data.frame(
+  test_data[, required_columns],  # Independent variables
+  reproduction_rate = test_data$reproduction_rate  # Dependent variable
+)
+
+# Remove rows with missing values across all required columns
+test_data_complete <- na.omit(test_data_combined)
+
+# Separate independent variables and actual values after removing NAs
+test_independent_vars_complete <- test_data_complete[, required_columns]
+actual_values_complete <- test_data_complete$reproduction_rate
+
+# Make predictions using the complete test data
+predictions <- predict(rf_model_tuned, data = test_independent_vars_complete)
+predicted_values <- predictions$predictions
+
+# Create a data frame with actual and predicted values for plotting
+results <- data.frame(
+  actual_reproduction_rate = actual_values_complete,
+  predicted_reproduction_rate = predicted_values
+)
+
+# Plot actual vs. predicted reproduction rates
+library(ggplot2)
+ggplot(results, aes(x = actual_reproduction_rate, y = predicted_reproduction_rate)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +  # 1:1 line for reference
+  labs(
+    title = "Actual vs. Predicted COVID-19 Reproduction Rates",
+    x = "Actual Reproduction Rate",
+    y = "Predicted Reproduction Rate"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+This is a scatter plot of actual reproduction rate against the random forests prediction. Better performing models will have a higher correlation with the red line, so it is evident our model is making errors.
+
+#### Scatter Plot of Our Residuals
+
+```{r}
+# Calculate residuals
+results <- data.frame(
+  actual_reproduction_rate = actual_values_complete,
+  predicted_reproduction_rate = predicted_values
+)
+results$residuals <- results$actual_reproduction_rate - results$predicted_reproduction_rate
+
+# Plot residuals against predicted reproduction rates
+ggplot(results, aes(x = predicted_reproduction_rate, y = residuals)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Reference line at zero
+  labs(
+    title = "Residuals Plot for COVID-19 Reproduction Rate Predictions",
+    x = "Predicted Reproduction Rate",
+    y = "Residuals (Actual - Predicted)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+This residuals plot shows the residuals, the difference between actual and predicted values, on the y-axis against predicted values of reproduction rate on the x-axis. A great model would have most points by the red line.
+
+
+## 7: Conclusion
+
+We have considered many factors in our random forest in an attempt to improve our models predictability. We found best that using 350 trees, whilst bootstrapping, and having a scale parameter of 1 worked best for our model. This was done through some manual checks, along with automated cross-validation. With all of these taken into consideration, we managed to reduce our MSE to an acceptable level, considering the complexity of our data set.
+
+## References
+
+https://bit.ly/Random-Forest-Info
+
+https://bit.ly/Why-Mean-Square-Error 
+
+https://bit.ly/Using-Ranger-in-R 
+
+https://bit.ly/Cross-Validation-R
+
+https://bit.ly/Plotting-Decision-Tree
+
+
+
