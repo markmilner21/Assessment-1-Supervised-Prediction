@@ -1,5 +1,5 @@
 ---
-title: "Final_R_Analysis"
+title: "RF_model"
 output: html_document
 date: "2024-10-25"
 ---
@@ -427,8 +427,6 @@ mae <- mean(abs(actual_values_complete - predictions))  # Calculate MAE
 
 # Print error metrics
 cat("Test MSE:", mse, "\n")
-cat("Test MAE:", mae, "\n")
-
 ```
 
 
@@ -499,8 +497,6 @@ mae <- mae(actual_values_complete, predicted_values)
 
 
 cat("MSE:", mse, "\n")
-cat("MAE:", mae, "\n")
-
 ```
 Here we see our best model so far, with the lowest MSE achieved. This is a very good MSE considering the complex nature of our dataset, considering the sudden changes due to new policy, lockdowns, re-openings and so many more factors due to the COVID-19 pandemic.
 
